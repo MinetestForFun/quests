@@ -1,3 +1,6 @@
+--- Quests HUD.
+-- @module hud
+
 -- Boilerplate to support localized strings if intllib mod is installed.
 local S
 if minetest.get_modpath("intllib") then
@@ -13,8 +16,10 @@ local hud_config = { position = {x = 1, y = 0.2},
 			offset = { x = -200, y = 0},
 			number = quests.colors.new }
 
--- call this function to enable the HUD for the player that shows his quests
--- the HUD can only show up to show_max quests
+--- Show quests HUD to player.
+-- The HUD can only show up to show_max quests
+-- @param playername Player whose quests HUD must be shown
+-- @param autohide Whether to automatically hide the HUD once it's empty
 function quests.show_hud(playername, autohide)
 	if (quests.hud[playername] == nil) then
 		quests.hud[playername] = { autohide = autohide}
@@ -41,7 +46,8 @@ function quests.show_hud(playername, autohide)
 	minetest.after(0, quests.update_hud, playername)
 end
 
--- call this method to hide the hud
+--- Hide quests HUD to player.
+-- @param playername Player whose quests HUD must be hidden
 function quests.hide_hud(playername)
 	local player = minetest.get_player_by_name(playername)
 	if (player == nil or quests.hud[playername] == nil or quests.hud[playername].list == nil) then
