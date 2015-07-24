@@ -11,6 +11,65 @@ else
 end
 local empty_callback = function(...) end
 
+local function compute_tasks(playername, questname, nocallback)
+	local quest = quests.registered_quests[questname]
+	local plr_quest = quests.active_quests[playername][questname]
+	for taskname, task in pairs(quest.tasks) do
+		local plr_task = plr_quest[taskname]
+		if task.requires == nil then
+			plr_task.visible = true
+		else
+			local was_visible = task.visible
+			local final_enabler = ""
+			for _, enabler_name in ipairs(task.requires) do
+				if type(enabler_name) == "table" then
+					plr_task.visible = true
+					for _, subena_name in ipairs(plr_task[enabler_name]) do
+						local plr_subena = plr_task[subena_name]
+						if not plr_subena.visible or not plr_subena.finished then
+							plr_task.visible = false
+							break
+						end
+					end
+				else
+					plr_task.visible = plr_task[enabler_name].finished
+				end
+				if plr_task.visible then
+					final_enabler = enabler
+					break
+				end
+			end
+			if plr_task.visible and not was_visible and not nocallback then
+				task.availablecallback(playername, questname, taskname, final_enabler, quest.metadata)
+			end
+		end
+		if task.disables_on ~= nil then
+			local was_disabled = task.disabled
+			local final_disabler = ""
+			for _, disabler_name in ipairs(task.disables_on) do
+				if type(disabler) == "table" then
+					plr_task.disabled = true
+					for _, subdis_name in ipairs(disabler) do
+						local plr_subdis = plr_task[subdis_name]
+						if plr_subdis.visible and plr_subdis.finished then
+							plr_task.disabled = false
+							break
+						end
+					end
+				else
+					plr_task.disabled = plr_task[disabler_name].finished
+				end
+				if plr_task.disabled then
+					final_disabler = disabler
+					break
+				end
+			end
+			if plr_task.disabled and not was_disabled and not nocallback then
+				task.disablecallback(playername, questname, taskname, final_disabler, quest.metadata)
+			end
+		end
+	end
+end
 
 --- Registers a quest for later use.
 -- There are two types of quests: simple and tasked.
@@ -26,6 +85,7 @@ local empty_callback = function(...) end
 --       icon,          -- Texture name of the quest's icon. If missing, a default icon is used.
 --       startcallback, -- Called upon quest start.  function(playername, questname, metadata)
 --       autoaccept,    -- If true, quest automatically becomes completed if its progress reaches the max.
+--                      -- Defaults to true.
 --       endcallback,   -- If autoaccept is true, gets called at the end of the quest.
 --                      --   function(playername, questname, metadata)
 --       abortcallback, -- Called when a player cancels the quest.  function(playername, questname, metadata)
@@ -49,9 +109,13 @@ local empty_callback = function(...) end
 --         --   To to task completion groups (i.e. where ALL must be compileted), pass said names in a (sub)table.
 --     
 --         availablecallback,
---         -- Called when the task becomes available.
---         --   function(playername, questname, metadata, taskname, enablingtaskname)
+--         -- Called when the task becomes available. Not called when there are no task requirements (i.e. task is available from the start).
+--         --   function(playername, questname, taskname, enablingtaskname, metadata)
 --         --   enablingtaskname is a string or a table of strings, depending on the condition that unlocked the task
+--
+--         endcallback,
+--         -- Called upon task completion.
+--         --   function(playername, questname, taskname, metadata)
 --       }
 --       something = {
 --         [...],
@@ -61,20 +125,22 @@ local empty_callback = function(...) end
 --         -- Same as `requires`, but *disables* the task (it then does not count towards quest completion)
 --     
 --         disablecallback,
---         -- Called when the task becomes disabled.
---         --   function(playername, questname, metadata, taskname, disablingtaskname)
+--         -- Called when the task becomes disabled. Not called when the task is disabled upon quest start.
+--         --   function(playername, questname, taskname, disablingtaskname, metadata)
 --         --   disablingtaskname is a string or a table of strings, depending on the condition that locked the task
 --       }
 --     }
 -- In this previous example the 2 last tasks enables once the `start` one is completed, and the
 -- last one disables upon `another_task` completion, effectively making it optional if one
 -- completes `another_task` before it.
+-- Note: this function *copies* the `quest` table, keeping only what's needed. This way you can implement custom
+--       quest attributes in your mod and register the quest directly without worrying about keyvalue name collision.
 -- @param questname Name of the quest. Should follow the naming conventions: `modname:questname`
 -- @param quest Quest definition `table`
 -- @return `true` when the quest was successfully registered
 -- @return `false` when there was already such a quest, or if mandatory info was omitted/corrupt
 function quests.register_quest(questname, quest)
-	if (quests.registered_quests[questname] ~= nil) then
+	if quests.registered_quests[questname] ~= nil then
 		return false -- The quest was not registered since there already a quest with that name
 	end
 	quests.registered_quests[questname] = {
@@ -82,8 +148,7 @@ function quests.register_quest(questname, quest)
 		description   = quest.description or S("missing description"),
 		icon          = quest.icon or "quests_default_quest_icon.png",
 		startcallback = quest.startcallback or empty_callback,
-		autoaccept    = quest.autoaccept or false,
-		callback      = quest.callback or empty_callback,
+		autoaccept    = quest.autoaccept or true,
 		endcallback   = quest.endcallback or empty_callback,
 		abortcallback = quest.abortcallback or empty_callback,
 		periodicity   = quest.periodicity or 0 
@@ -93,7 +158,7 @@ function quests.register_quest(questname, quest)
 		new_quest.max = quest.max or 1
 		new_quest.simple = true
 	else
-		if quest.tasks == nil or type(quests.task) ~= "table" then
+		if quest.tasks == nil or type(quest.tasks) ~= "table" then
 			quests.registered_quests[questname] = nil
 			return false
 		end
@@ -101,14 +166,15 @@ function quests.register_quest(questname, quest)
 		local tcount = 0
 		for tname, task in pairs(quest.tasks) do
 			new_quest.tasks[tname] = {
-				title             = quest.title or S("missing title"),
-				description       = quest.description or S("missing description"),
-				icon              = quest.icon or "quests_default_quest_icon.png",
-				max               = quest.max or 1,
-				requires          = quest.requires,
-				availablecallback = quest.availablecallback or empty_callback,
-				disables_on       = quest.disables_on,
-				disablecallback   = quest.disablecallback or empty_callback
+				title             = task.title or S("missing title"),
+				description       = task.description or S("missing description"),
+				icon              = task.icon or "quests_default_quest_icon.png",
+				max               = task.max or 1,
+				requires          = task.requires,
+				availablecallback = task.availablecallback or empty_callback,
+				disables_on       = task.disables_on,
+				disablecallback   = task.disablecallback or empty_callback,
+				endcallback       = task.endcallback or empty_callback
 			}
 			tcount = tcount + 1
 		end
@@ -138,10 +204,19 @@ function quests.start_quest(playername, questname, metadata)
 		return false -- the player already has this quest
 	end
 	if quest.simple then
-		quests.active_quests[playername][questname] = {value = 0, metadata = metadata}
+		quests.active_quests[playername][questname] = {value = 0, metadata = metadata, finished = false}
 	else
 		quests.active_quests[playername][questname] = {metadata = metadata}
+		for tname, task in pairs(quest.tasks) do
+			quests.active_quests[playername][questname][tname] = {
+				value    = 0,
+				visible  = false,
+				disabled = false,
+				finished = false
+			}
+		end
 	end
+	compute_tasks(playername, questname)
 
 	quests.update_hud(playername)
 	quests.show_message("new", playername, S("New quest:") .. " " .. quest.title)
@@ -179,6 +254,9 @@ function quests.update_quest(playername, questname, value)
 		return false -- The quest is already finished
 	end
 	local quest = quests.registered_quests[questname]
+	if not quest.simple then
+		return false -- See quests.update_quest_task
+	end
 	plr_quest.value = plr_quest.value + value
 	if plr_quest.value >= quest.max then
 		plr_quest.value = quest.max
@@ -201,35 +279,54 @@ end
 -- @param questname Quest which gets updated
 -- @param taskname Task to update
 -- @param value Value to add to the task's progress (can be negative)
--- @return `true` if the quest is finished
--- @return `false` if there is no such quest, is a simple one, or the quest continues
+-- @return `true` if the task is finished
+-- @return `false` if there is no such quest, is a simple one, or the task continues
 -- @see quests.update_quest
 function quests.update_quest_task(playername, questname, taskname, value)
---[[
 	if not check_active_quest(playername, questname) then
 		return false -- There is no such quest or it isn't active
 	end
 	local quest = quests.registered_quests[questname]
-	if taskname == nil or quest.tasks[taskname] == nil or value == nil then
-		return false
+	if quest.simple then
+		return false -- See quests.update_quest
+	end
+	local task = quest.tasks[taskname]
+	if taskname == nil or task == nil or value == nil then
+		return false -- No such task, or bad value
 	end
 	local plr_quest = quests.active_quests[playername][questname]
-	if plr_quest.finished then
+	local plr_task = plr_quest[taskname]
+	if not plr_task or plr_task.finished then
 		return false -- The quest is already finished
 	end
-	plr_quest.value = plr_quest.value + value
-	if plr_quest.value >= quest.max then
-		plr_quest.value = quest.max
+
+	local task_finished = false
+	plr_task.value = plr_task.value + value
+	if plr_task.value >= task.max then
+		plr_task.value = task.max
+		plr_task.finished = true
+		task.endcallback(playername, questname, taskname, quest.metadata)
+		task_finished = true
+	end
+
+	compute_tasks(playername, questname)
+	-- Check for quest completion
+	local all_tasks_finished = true
+	for taskname, task in pairs(quest.tasks) do
+		if plr_task.visible and not plr_task.disabled and not plr_task.finished then
+			all_tasks_finished = false
+		end
+	end
+	if all_tasks_finished then
 		if quest.autoaccept then
 			quest.endcallback(playername, questname, plr_quest.metadata)
 			quests.accept_quest(playername,questname)
 			quests.update_hud(playername)
 		end
-		return true -- the quest is finished
+		return true
 	end
 	quests.update_hud(playername)
-	return false -- the quest continues
-]]
+	return task_finished
 end
 
 --- Confirms quest completion and ends it.
@@ -251,7 +348,7 @@ function quests.accept_quest(playername, questname)
 		end
 		quests.active_quests[playername][questname].finished = true
 		for _,quest in ipairs(quests.hud[playername].list) do
-			if (quest.name == questname) then
+			if quest.name == questname then
 				local player = minetest.get_player_by_name(playername)
 				player:hud_change(quest.id, "number", quests.colors.success)
 			end

@@ -16,23 +16,32 @@ function quests.create_formspec(playername, tab, integrated)
 	quests.formspec_lists[playername].id = 1
 	quests.formspec_lists[playername].list = {}
 	tab = tab or quests.formspec_lists[playername].tab or "1"
-	if (tab == "1") then
+	if tab == "1" then
 		questlist = quests.active_quests[playername] or {}
-	elseif (tab == "2") then
+	elseif tab == "2" then
 		questlist = quests.successfull_quests[playername] or {}
-	elseif (tab == "3") then
+	elseif tab == "3" then
 		questlist = quests.failed_quests[playername] or {}
 	end
 	quests.formspec_lists[playername].tab = tab
-		
+
 	local no_quests = true
 	for questname,questspecs in pairs(questlist) do
-		if (questspecs.finished == nil) then
-			local queststring = quests.registered_quests[questname]["title"]
-			if (questspecs["count"] and questspecs["count"] > 1) then
-				queststring = queststring .. " - " .. questspecs["count"]
-			elseif(not questspecs["count"] and quests.registered_quests[questname]["max"] ~= 1) then
-				queststring = queststring .. " - (" .. quests.round(questspecs["value"], 2) .. "/" .. quests.registered_quests[questname]["max"] .. ")"
+		if not questspecs.finished then
+			local quest = quests.registered_quests[questname]
+			local queststring = quest.title
+			if quest.simple then
+				if questspecs.count and questspecs.count > 1 then
+					queststring = queststring .. " - " .. questspecs.count
+				elseif not questspecs.count and quest.max ~= 1 then
+					queststring = queststring .. " - (" .. quests.round(questspecs.value, 2) .. "/" .. quest.max .. ")"
+				end
+			else
+				if questspecs.count and questspecs.count > 1 then
+					queststring = queststring .. " - " .. questspecs.count
+				elseif not questspecs.count and quest.max ~= 1 then
+					queststring = queststring .. " - (...)"
+				end
 			end
 			table.insert(queststringlist, queststring)
 			table.insert(quests.formspec_lists[playername].list, questname)
@@ -40,16 +49,16 @@ function quests.create_formspec(playername, tab, integrated)
 		end
 	end
 	local formspec = ""
-	if (not integrated) then
+	if not integrated then
 		formspec = formspec .. "size[7,9]"
 	end
 	formspec = formspec .. "tabheader[0,0;quests_header;" .. S("Open quests") .. "," .. S("Finished quests") .. "," .. S("Failed quests") .. ";" .. tab .. "]"
-	if (no_quests) then
+	if no_quests then
 		formspec = formspec .. "label[0.25,0.25;" .. S("There are no quests in this category.") .. "]"
 	else
 		formspec = formspec .. "textlist[0.25,0.25;6.5,6.5;quests_questlist;"..table.concat(queststringlist, ",") .. ";1;false]"
 	end
-	if (quests.formspec_lists[playername].tab == "1") then
+	if quests.formspec_lists[playername].tab == "1" then
 		formspec = formspec .."button[0.25,7;3,.7;quests_abort;" .. S("Abort quest") .. "]"
 	end
 	formspec = formspec .. "button[3.75,7;3,.7;quests_config;" .. S("Configure") .. "]"..
@@ -117,26 +126,62 @@ local function wordwrap(text, linelength)
 end
 
 -- construct the info formspec
-function quests.create_info(playername, questname, integrated)
+function quests.create_info(playername, questname, taskid, integrated)
 	local formspec = ""
-	if (not integrated) then
-		formspec = formspec .. "size[9,6.5]"
+	if not integrated then
+		formspec = formspec .. "size[7.5,9]"
 	end
-	formspec = formspec .. "label[0.5,0.5;" 
+	formspec = formspec .. "label[0.8,0.1;"
 
-	if (questname) then
-		formspec = formspec .. quests.registered_quests[questname].title .. "]" ..
-				"box[.4,1.5;8.2,4.5;#999999]" ..
-				"label[.5,1.5;" ..
-				wordwrap(quests.registered_quests[questname].description, 60) .. "]"
+	if questname then
+		local quest = quests.registered_quests[questname]
+		formspec = formspec .. quest.title .. "]" ..
+				"image[0,0;0.8,0.8;" .. quest.icon .. "]"
 
-		if (quests.formspec_lists[playername].tab == "1") then
-			formspec = formspec .. "button[.5,6;3,.7;quests_info_abort;" .. S("Abort quest") .. "]"
+		if quest.simple then
+			formspec = formspec .. "textarea[.4,1;7.2,7;_;;" .. minetest.formspec_escape(quest.description) .. "]"
+		else
+			quests.formspec_lists[playername].taskid = nil
+			local taskidlist = {}
+			local taskstringlist = {}
+			for taskname, task in pairs(quest.tasks) do
+				local plr_task = quests.active_quests[playername][questname][taskname]
+				if not plr_task or (plr_task and plr_task.visible) then
+					-- not plr_task => quest is finished, display all tasks
+					table.insert(taskidlist, taskname)
+					local color = ""
+					if plr_task then
+						if plr_task.finished then
+							color = "#00BB00"
+						end
+						if plr_task.disabled then
+							color = "#AAAAAA"
+						end
+					end
+					table.insert(taskstringlist, color .. task.title .. " - " .. quests.round(plr_task.value, 2) .. "/" .. task.max)
+				end
+			end
+			local task = false
+			if taskid ~= nil then
+				task = quest.tasks[taskidlist[taskid]]
+			end
+			task = task or {title=S("No task selected"), description=""}
+			formspec = formspec .. "textarea[.4,1;7.2,2;_;;" .. minetest.formspec_escape(quest.description) .. "]" ..
+					"textlist[0.1,2.9;7,2;quest_info_tasklist;" .. table.concat(taskstringlist, ",") .. "]" ..
+					"label[0.8,5.2;" .. task.title .. "]" ..
+					"textarea[.4,6;7.2,2;__;;" .. minetest.formspec_escape(task.description) .. "]"
+			if task.icon then
+				formspec = formspec .. "image[0,5.1;0.8,0.8;" .. task.icon .. "]"
+			end
+		end
+
+		if quests.formspec_lists[playername].tab == "1" then
+			formspec = formspec .. "button[3.6,8;3,.7;quests_info_abort;" .. S("Abort quest") .. "]"
 		end
 	else
 		formspec = formspec .. S("No quest specified.") .. "]"
 	end
-	formspec = formspec .. "button[3.25,6;3,.7;quests_info_return;" .. S("Return") .. "]"
+	formspec = formspec .. "button[.4,8;3,.7;quests_info_return;" .. S("Return") .. "]"
 	return formspec
 end
 
@@ -157,22 +202,22 @@ minetest.register_chatcommand("quests", {
 
 -- Handle the return fields of the questlog
 minetest.register_on_player_receive_fields(function(player, formname, fields)
-	if (player == nil) then
+	if player == nil then
 		return
 	end
-	local playername = player:get_player_name();
-	if (playername == "") then
+	local playername = player:get_player_name()
+	if playername == "" then
 		return
 	end
 
 --	questlog
-	if (fields["quests_header"]) then
-		if (formname == "quests:questlog") then
-			minetest.show_formspec(playername, "quests:questlog", quests.create_formspec(playername, fields["quests_header"]))
+	if fields.quests_header then
+		if formname == "quests:questlog" then
+			minetest.show_formspec(playername, "quests:questlog", quests.create_formspec(playername, fields.quests_header))
 		else
-			if (fields["quests_header"] == "1") then
+			if fields.quests_header == "1" then
 				unified_inventory.set_inventory_formspec(player, "quests")
-			elseif (fields["quests_header"] == "2") then
+			elseif fields.quests_header == "2" then
 				unified_inventory.set_inventory_formspec(player, "quests_successfull")
 				return
 			else
@@ -208,7 +253,7 @@ minetest.register_on_player_receive_fields(function(player, formname, fields)
 	end
 	if (fields["quests_info"]) then
 		if (formname == "quests:questlog") then
-			minetest.show_formspec(playername, "quests:info", quests.create_info(playername, quests.formspec_lists[playername].list[quests.formspec_lists[playername].id]))
+			minetest.show_formspec(playername, "quests:info", quests.create_info(playername, quests.formspec_lists[playername].list[quests.formspec_lists[playername].id], nil, false))
 		else
 			unified_inventory.set_inventory_formspec(player, "quests_info")
 		end
@@ -263,19 +308,30 @@ minetest.register_on_player_receive_fields(function(player, formname, fields)
 	end
 
 -- info
-	if (fields["quests_info_abort"]) then
+	if fields.quest_info_tasklist then
+		local event = minetest.explode_textlist_event(fields.quest_info_tasklist)
+		if event.type == "CHG" then
+			if formname == "quests:questlog" then
+				minetest.show_formspec(playername, "quests:info", quests.create_info(playername, quests.formspec_lists[playername].list[quests.formspec_lists[playername].id]), event.index, false)
+			else
+				quests.formspec_lists[playername].taskid = event.index
+				unified_inventory.set_inventory_formspec(player, "quests_info")
+			end
+		end
+	end
+	if fields.quests_info_abort then
 		if (quests.formspec_lists[playername].id == nil) then
 			return
 		end
-		quests.abort_quest(playername, quests.formspec_lists[playername]["list"][quests.formspec_lists[playername].id]) 
-		if (formname == "quests:info") then
+		quests.abort_quest(playername, quests.formspec_lists[playername].list[quests.formspec_lists[playername].id]) 
+		if formname == "quests:info" then
 			minetest.show_formspec(playername, "quests:questlog", quests.create_formspec(playername))
 		else 
 			unified_inventory.set_inventory_formspec(player, "quests")
 		end
 	end
-	if (fields["quests_info_return"]) then
-		if (formname == "quests:info") then
+	if fields.quests_info_return then
+		if formname == "quests:info" then
 			minetest.show_formspec(playername, "quests:questlog", quests.create_formspec(playername))
 		else 
 			unified_inventory.set_inventory_formspec(player, "quests")

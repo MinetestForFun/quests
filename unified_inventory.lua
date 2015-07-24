@@ -41,7 +41,8 @@ unified_inventory.register_page("quests_config", {
 unified_inventory.register_page("quests_info", {
 	get_formspec = function(player)
 		local playername = player:get_player_name()
-		local formspec = quests.create_info(playername, quests.formspec_lists[playername].list[quests.formspec_lists[playername].id], true)
+		local formspec = quests.create_info(playername, quests.formspec_lists[playername].list[quests.formspec_lists[playername].id],
+			quests.formspec_lists[playername].taskid, true)
 		return {formspec = formspec, draw_inventory = false }
 	end
 })
