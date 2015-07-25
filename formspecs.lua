@@ -29,23 +29,25 @@ function quests.create_formspec(playername, tab, integrated)
 	for questname,questspecs in pairs(questlist) do
 		if not questspecs.finished then
 			local quest = quests.registered_quests[questname]
-			local queststring = quest.title
-			if quest.simple then
-				if questspecs.count and questspecs.count > 1 then
-					queststring = queststring .. " - " .. questspecs.count
-				elseif not questspecs.count and quest.max ~= 1 then
-					queststring = queststring .. " - (" .. quests.round(questspecs.value, 2) .. "/" .. quest.max .. ")"
+			if quest then -- Quest might have been deleted
+				local queststring = quest.title
+				if quest.simple then
+					if questspecs.count and questspecs.count > 1 then
+						queststring = queststring .. " - " .. questspecs.count
+					elseif not questspecs.count and quest.max ~= 1 then
+						queststring = queststring .. " - (" .. quests.round(questspecs.value, 2) .. "/" .. quest.max .. ")"
+					end
+				else
+					if questspecs.count and questspecs.count > 1 then
+						queststring = queststring .. " - " .. questspecs.count
+					elseif not questspecs.count and quest.max ~= 1 then
+						queststring = queststring .. " - (...)"
+					end
 				end
-			else
-				if questspecs.count and questspecs.count > 1 then
-					queststring = queststring .. " - " .. questspecs.count
-				elseif not questspecs.count and quest.max ~= 1 then
-					queststring = queststring .. " - (...)"
-				end
+				table.insert(queststringlist, queststring)
+				table.insert(quests.formspec_lists[playername].list, questname)
+				no_quests = false
 			end
-			table.insert(queststringlist, queststring)
-			table.insert(quests.formspec_lists[playername].list, questname)
-			no_quests = false
 		end
 	end
 	local formspec = ""
@@ -56,12 +58,13 @@ function quests.create_formspec(playername, tab, integrated)
 	if no_quests then
 		formspec = formspec .. "label[0.25,0.25;" .. S("There are no quests in this category.") .. "]"
 	else
-		formspec = formspec .. "textlist[0.25,0.25;6.5,6.5;quests_questlist;"..table.concat(queststringlist, ",") .. ";1;false]"
+		formspec = formspec .. "textlist[0.25,0.25;6.5,6;quests_questlist;"..table.concat(queststringlist, ",") .. ";1;false]"
 	end
 	if quests.formspec_lists[playername].tab == "1" then
-		formspec = formspec .."button[0.25,7;3,.7;quests_abort;" .. S("Abort quest") .. "]"
+		formspec = formspec .."button[0.25,7.1;3,.7;quests_abort;" .. S("Abort quest") .. "]" ..
+				"checkbox[.25,6.2;quests_show_quest_in_hud;" .. S("Show in HUD") .. ";" .. "false" .. "]"
 	end
-	formspec = formspec .. "button[3.75,7;3,.7;quests_config;" .. S("Configure") .. "]"..
+	formspec = formspec .. "button[3.75,7.1;3,.7;quests_config;" .. S("Configure") .. "]"..
 			"button[.25,8;3,.7;quests_info;" .. S("Info") .. "]"..
 			"button_exit[3.75,8;3,.7;quests_exit;" .. S("Exit") .. "]"
 	return formspec
@@ -145,11 +148,15 @@ function quests.create_info(playername, questname, taskid, integrated)
 			local taskidlist = {}
 			local taskstringlist = {}
 			for taskname, task in pairs(quest.tasks) do
-				local plr_task = quests.active_quests[playername][questname][taskname]
+				local plr_task = nil
+				if quests.active_quests[playername] and quests.active_quests[playername][questname] then
+					 plr_task = quests.active_quests[playername][questname][taskname]
+				end
 				if not plr_task or (plr_task and plr_task.visible) then
 					-- not plr_task => quest is finished, display all tasks
 					table.insert(taskidlist, taskname)
 					local color = ""
+					local suffix = ""
 					if plr_task then
 						if plr_task.finished then
 							color = "#00BB00"
@@ -157,8 +164,9 @@ function quests.create_info(playername, questname, taskid, integrated)
 						if plr_task.disabled then
 							color = "#AAAAAA"
 						end
+						suffix = " - " .. quests.round(plr_task.value, 2) .. "/" .. task.max
 					end
-					table.insert(taskstringlist, color .. task.title .. " - " .. quests.round(plr_task.value, 2) .. "/" .. task.max)
+					table.insert(taskstringlist, color .. task.title .. suffix)
 				end
 			end
 			local task = false
@@ -311,8 +319,8 @@ minetest.register_on_player_receive_fields(function(player, formname, fields)
 	if fields.quest_info_tasklist then
 		local event = minetest.explode_textlist_event(fields.quest_info_tasklist)
 		if event.type == "CHG" then
-			if formname == "quests:questlog" then
-				minetest.show_formspec(playername, "quests:info", quests.create_info(playername, quests.formspec_lists[playername].list[quests.formspec_lists[playername].id]), event.index, false)
+			if formname == "quests:info" then
+				minetest.show_formspec(playername, "quests:info", quests.create_info(playername, quests.formspec_lists[playername].list[quests.formspec_lists[playername].id], event.index, false))
 			else
 				quests.formspec_lists[playername].taskid = event.index
 				unified_inventory.set_inventory_formspec(player, "quests_info")
@@ -320,7 +328,7 @@ minetest.register_on_player_receive_fields(function(player, formname, fields)
 		end
 	end
 	if fields.quests_info_abort then
-		if (quests.formspec_lists[playername].id == nil) then
+		if quests.formspec_lists[playername].id == nil then
 			return
 		end
 		quests.abort_quest(playername, quests.formspec_lists[playername].list[quests.formspec_lists[playername].id]) 

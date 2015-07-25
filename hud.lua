@@ -150,43 +150,45 @@ function quests.update_hud(playername)
 	for questname,questspecs in pairs(quests.active_quests[playername]) do
 		if not visible[questname] then
 			local quest = quests.registered_quests[questname]
-			if quest.simple then
-				local id = player:hud_add({	hud_elem_type = "text",
-								alignment = { x=1, y= 1 },
-								position = {x = hud_config.position.x, y = hud_config.position.y},
-								offset = {x = hud_config.offset.x, y = hud_config.offset.y + counter * 40},
-								number = hud_config.number,
-								text = get_quest_hud_string(questname, questspecs) })
-				local id_background
-				local id_bar
-				if quest.max ~= 1 then
-					id_background = player:hud_add({ hud_elem_type = "image",
-									scale = { x = 1, y = 1 },
-									size = { x = 2, y = 4 },
+			if quest then -- Quest might have been deleted
+				if quest.simple then
+					local id = player:hud_add({	hud_elem_type = "text",
+									alignment = { x=1, y= 1 },
+									position = {x = hud_config.position.x, y = hud_config.position.y},
+									offset = {x = hud_config.offset.x, y = hud_config.offset.y + counter * 40},
+									number = hud_config.number,
+									text = get_quest_hud_string(questname, questspecs) })
+					local id_background
+					local id_bar
+					if quest.max ~= 1 then
+						id_background = player:hud_add({ hud_elem_type = "image",
+										scale = { x = 1, y = 1 },
+										size = { x = 2, y = 4 },
+										alignment = { x = 1, y = 1 },
+										position = { x = hud_config.position.x, y = hud_config.position.y },
+										offset = { x = hud_config.offset.x, y = hud_config.offset.y + counter * 40 + 22 },
+										text = "quests_questbar_background.png" })
+						id_bar = player:hud_add({hud_elem_type = "image",
+									scale = { x = math.floor(20 * questspecs.value / quest.max),
+										y = 1 },
 									alignment = { x = 1, y = 1 },
 									position = { x = hud_config.position.x, y = hud_config.position.y },
-									offset = { x = hud_config.offset.x, y = hud_config.offset.y + counter * 40 + 22 },
-									text = "quests_questbar_background.png" })
-					id_bar = player:hud_add({hud_elem_type = "image",
-								scale = { x = math.floor(20 * questspecs.value / quest.max),
-									y = 1 },
-								alignment = { x = 1, y = 1 },
-								position = { x = hud_config.position.x, y = hud_config.position.y },
-								offset = { x = hud_config.offset.x + 2, y = hud_config.offset.y + counter * 40 + 24 },
-								text = "quests_questbar.png" })
-				end
+									offset = { x = hud_config.offset.x + 2, y = hud_config.offset.y + counter * 40 + 24 },
+									text = "quests_questbar.png" })
+					end
 
-				table.insert(quests.hud[playername].list, {  name          = questname,
-									id            = id,
-									id_background = id_background,
-									id_bar        = id_bar,
-									value         = questspecs.value })
-			else
-				-- TODO
-			end
-			counter = counter + 1
-			if (counter >= show_max + 1) then
-				break
+					table.insert(quests.hud[playername].list, {  name          = questname,
+										id            = id,
+										id_background = id_background,
+										id_bar        = id_bar,
+										value         = questspecs.value })
+				else
+					-- TODO
+				end
+				counter = counter + 1
+				if (counter >= show_max + 1) then
+					break
+				end
 			end
 		end
 	end

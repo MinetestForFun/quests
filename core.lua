@@ -19,23 +19,27 @@ local function compute_tasks(playername, questname, nocallback)
 		if task.requires == nil then
 			plr_task.visible = true
 		else
+			plr_task.visible = false
 			local was_visible = task.visible
 			local final_enabler = ""
 			for _, enabler_name in ipairs(task.requires) do
 				if type(enabler_name) == "table" then
 					plr_task.visible = true
-					for _, subena_name in ipairs(plr_task[enabler_name]) do
+					for _, subena_name in ipairs(plr_quest[enabler_name]) do
 						local plr_subena = plr_task[subena_name]
-						if not plr_subena.visible or not plr_subena.finished then
+						if plr_task.visible and plr_subena and (not plr_subena.visible or not plr_subena.finished) then
 							plr_task.visible = false
-							break
 						end
 					end
 				else
-					plr_task.visible = plr_task[enabler_name].finished
+					if plr_quest[enabler_name] then
+						plr_task.visible = plr_quest[enabler_name].finished or false
+					else
+						plr_task.visible = true
+					end
 				end
 				if plr_task.visible then
-					final_enabler = enabler
+					final_enabler = enabler_name
 					break
 				end
 			end
@@ -50,17 +54,16 @@ local function compute_tasks(playername, questname, nocallback)
 				if type(disabler) == "table" then
 					plr_task.disabled = true
 					for _, subdis_name in ipairs(disabler) do
-						local plr_subdis = plr_task[subdis_name]
-						if plr_subdis.visible and plr_subdis.finished then
-							plr_task.disabled = false
-							break
+						local plr_subdis = plr_quest[subdis_name]
+						if not plr_task.disabled and plr_subdis.visible and plr_subdis.finished then
+							plr_task.disabled = true
 						end
 					end
 				else
-					plr_task.disabled = plr_task[disabler_name].finished
+					plr_task.disabled = plr_quest[disabler_name].finished
 				end
 				if plr_task.disabled then
-					final_disabler = disabler
+					final_disabler = disabler_name
 					break
 				end
 			end
@@ -313,6 +316,7 @@ function quests.update_quest_task(playername, questname, taskname, value)
 	-- Check for quest completion
 	local all_tasks_finished = true
 	for taskname, task in pairs(quest.tasks) do
+		local plr_task = plr_quest[taskname]
 		if plr_task.visible and not plr_task.disabled and not plr_task.finished then
 			all_tasks_finished = false
 		end
