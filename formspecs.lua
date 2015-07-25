@@ -31,17 +31,25 @@ function quests.create_formspec(playername, tab, integrated)
 			local quest = quests.registered_quests[questname]
 			if quest then -- Quest might have been deleted
 				local queststring = quest.title
-				if quest.simple then
-					if questspecs.count and questspecs.count > 1 then
+				if questspecs.count then
+					if questspecs.count > 1 then
 						queststring = queststring .. " - " .. questspecs.count
-					elseif not questspecs.count and quest.max ~= 1 then
-						queststring = queststring .. " - (" .. quests.round(questspecs.value, 2) .. "/" .. quest.max .. ")"
 					end
-				else
-					if questspecs.count and questspecs.count > 1 then
-						queststring = queststring .. " - " .. questspecs.count
-					elseif not questspecs.count and quest.max ~= 1 then
-						queststring = queststring .. " - (...)"
+					local restart_remaining = quests.quest_restarting_in(playername, questname)
+					if restart_remaining ~= nil then
+						queststring = queststring .. " (" .. S("restarts in %ds"):format(restart_remaining) .. ")"
+					end
+				elseif not questspecs.count and quest.max ~= 1 then
+					if quest.simple then
+						queststring = queststring .. " (" .. quests.round(questspecs.value, 2) .. "/" .. quest.max .. ")"
+					else
+						local active_tasks, active_completed = quests.get_active_tasks_stats(playername, questname)
+						if active_tasks and active_completed then
+							queststring = queststring .. " (" .. S("%d/%d tasks done"):format(active_completed, active_tasks) .. ")"
+						else
+							-- Kind of an error
+							queststring = queststring .. " (...)"
+						end
 					end
 				end
 				table.insert(queststringlist, queststring)
@@ -134,12 +142,17 @@ function quests.create_info(playername, questname, taskid, integrated)
 	if not integrated then
 		formspec = formspec .. "size[7.5,9]"
 	end
-	formspec = formspec .. "label[0.8,0.1;"
 
 	if questname then
+		local restart_remaining = quests.quest_restarting_in(playername, questname)
 		local quest = quests.registered_quests[questname]
-		formspec = formspec .. quest.title .. "]" ..
-				"image[0,0;0.8,0.8;" .. quest.icon .. "]"
+		formspec = formspec .. "image[0,0;0.8,0.8;" .. quest.icon .. "]"
+		if restart_remaining ~= nil then
+			formspec = formspec .. "label[0.8,0;" .. quest.title .. "]" ..
+					"label[0.8,0.3;" .. S("%ds seconds remaining"):format(restart_remaining) .. "]"
+		else
+			formspec = formspec .. "label[0.8,0.1;" .. quest.title .. "]"
+		end
 
 		if quest.simple then
 			formspec = formspec .. "textarea[.4,1;7.2,7;_;;" .. minetest.formspec_escape(quest.description) .. "]"
@@ -187,7 +200,7 @@ function quests.create_info(playername, questname, taskid, integrated)
 			formspec = formspec .. "button[3.6,8;3,.7;quests_info_abort;" .. S("Abort quest") .. "]"
 		end
 	else
-		formspec = formspec .. S("No quest specified.") .. "]"
+		formspec = formspec .. "label[0.8,0.1;" .. S("No quest specified.") .. "]"
 	end
 	formspec = formspec .. "button[.4,8;3,.7;quests_info_return;" .. S("Return") .. "]"
 	return formspec

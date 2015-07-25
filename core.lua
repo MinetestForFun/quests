@@ -83,16 +83,16 @@ end
 -- 
 -- Both quest types are defined by a table, and they share common information:
 --     {
---       title,         -- Self-explanatory. Should describe the objective for simple quests.
---       description,   -- Description/lore of the quest
---       icon,          -- Texture name of the quest's icon. If missing, a default icon is used.
---       startcallback, -- Called upon quest start.  function(playername, questname, metadata)
---       autoaccept,    -- If true, quest automatically becomes completed if its progress reaches the max.
---                      -- Defaults to true.
---       endcallback,   -- If autoaccept is true, gets called at the end of the quest.
---                      --   function(playername, questname, metadata)
---       abortcallback, -- Called when a player cancels the quest.  function(playername, questname, metadata)
---       periodicity    -- Delay in seconds before the quest becomes available again. If nil or 0, doesn't restart.
+--       title,            -- Self-explanatory. Should describe the objective for simple quests.
+--       description,      -- Description/lore of the quest
+--       icon,             -- Texture name of the quest's icon. If missing, a default icon is used.
+--       startcallback,    -- Called upon quest start.  function(playername, questname, metadata)
+--       autoaccept,       -- If true, quest automatically becomes completed if its progress reaches the max.
+--                         -- Defaults to true.
+--       completecallback, -- If autoaccept is true, gets called at quest completion.
+--                         --   function(playername, questname, metadata)
+--       abortcallback,    -- Called when a player cancels the quest.  function(playername, questname, metadata)
+--       repeating         -- Delay in seconds before the quest becomes available again. If nil, 0 or false, doesn't restart.
 --     }
 -- 
 -- In addition, simple quests have a number-type `max` element indicating the max progress of the quest.
@@ -116,7 +116,7 @@ end
 --         --   function(playername, questname, taskname, enablingtaskname, metadata)
 --         --   enablingtaskname is a string or a table of strings, depending on the condition that unlocked the task
 --
---         endcallback,
+--         completecallback,
 --         -- Called upon task completion.
 --         --   function(playername, questname, taskname, metadata)
 --       }
@@ -144,17 +144,17 @@ end
 -- @return `false` when there was already such a quest, or if mandatory info was omitted/corrupt
 function quests.register_quest(questname, quest)
 	if quests.registered_quests[questname] ~= nil then
-		return false -- The quest was not registered since there already a quest with that name
+		return false -- The quest was not registered since there's already a quest with that name
 	end
 	quests.registered_quests[questname] = {
-		title         = quest.title or S("missing title"),
-		description   = quest.description or S("missing description"),
-		icon          = quest.icon or "quests_default_quest_icon.png",
-		startcallback = quest.startcallback or empty_callback,
-		autoaccept    = quest.autoaccept or true,
-		endcallback   = quest.endcallback or empty_callback,
-		abortcallback = quest.abortcallback or empty_callback,
-		periodicity   = quest.periodicity or 0 
+		title            = quest.title or S("missing title"),
+		description      = quest.description or S("missing description"),
+		icon             = quest.icon or "quests_default_quest_icon.png",
+		startcallback    = quest.startcallback or empty_callback,
+		autoaccept       = quest.autoaccept or true,
+		completecallback = quest.completecallback or empty_callback,
+		abortcallback    = quest.abortcallback or empty_callback,
+		repeating        = quest.repeating or 0 
 	}
 	local new_quest = quests.registered_quests[questname]
 	if quest.max ~= nil then -- Simple quest
@@ -177,7 +177,7 @@ function quests.register_quest(questname, quest)
 				availablecallback = task.availablecallback or empty_callback,
 				disables_on       = task.disables_on,
 				disablecallback   = task.disablecallback or empty_callback,
-				endcallback       = task.endcallback or empty_callback
+				completecallback  = task.completecallback or empty_callback
 			}
 			tcount = tcount + 1
 		end
@@ -235,36 +235,42 @@ local function check_active_quest(playername, questname)
 		quests.active_quests[playername][questname] == nil -- Quest isn't active
 	)
 end
+local function check_active_quest_task(playername, questname, taskname)
+	return not(
+		taskname == nil or
+		not check_active_quest(playername, questname) or
+		quests.registered_quests[questname].simple or -- Quest is simple (i.e. no tasks)
+		quests.registered_quests[questname].tasks == nil or -- Who knows? Avoid crash.
+		quests.registered_quests[questname].tasks[taskname] == nil or -- No such task
+		quests.active_quests[playername][questname][taskname] == nil -- Player quest data has no such task
+	)
+end
 
 --- Updates a *simple* quest's status.
--- Calls the quest's `endcallback` if autoaccept is `true` and the quest reaches its max value.
+-- Calls the quest's `completecallback` if autoaccept is `true` and the quest reaches its max value.
 -- Has no effect on tasked quests.
 -- @param playername Name of the player
 -- @param questname Quest which gets updated
 -- @param value Value to add to the quest's progress (can be negative)
 -- @return `true` if the quest is finished
--- @return `false` if there is no such quest, is a tasked one, or the quest continues
+-- @return `false` if the quest continues
+-- @return `nil` if there is no such quest, it is a tasked or non-active one, or no value was given
 -- @see quests.update_quest_task
 function quests.update_quest(playername, questname, value)
-	if not check_active_quest(playername, questname) then
-		return false -- There is no such quest or it isn't active
-	end
-	if value == nil then
-		return false -- No value given
+	if not check_active_quest(playername, questname) or not quests.registered_quests[questname].simple
+		or value == nil then
+		return nil
 	end
 	local plr_quest = quests.active_quests[playername][questname]
 	if plr_quest.finished then
-		return false -- The quest is already finished
+		return true -- The quest is already finished
 	end
 	local quest = quests.registered_quests[questname]
-	if not quest.simple then
-		return false -- See quests.update_quest_task
-	end
 	plr_quest.value = plr_quest.value + value
 	if plr_quest.value >= quest.max then
 		plr_quest.value = quest.max
 		if quest.autoaccept then
-			quest.endcallback(playername, questname, plr_quest.metadata)
+			quest.completecallback(playername, questname, plr_quest.metadata)
 			quests.accept_quest(playername,questname)
 			quests.update_hud(playername)
 		end
@@ -275,40 +281,36 @@ function quests.update_quest(playername, questname, value)
 end
 
 --- Updates a *tasked* quest task's status.
--- Calls the quest's `endcallback` if autoaccept is `true` and all the quest's enabled
---   tasks reaches their max value.
+-- Calls the quest's `completecallback` if autoaccept is `true` and all the quest's visible
+-- and non-disabled tasks reaches their max value.
+-- Also calls the task's `completecallback` it it gets completed.
 -- Has no effect on simple quests.
 -- @param playername Name of the player
 -- @param questname Quest which gets updated
 -- @param taskname Task to update
 -- @param value Value to add to the task's progress (can be negative)
 -- @return `true` if the task is finished
--- @return `false` if there is no such quest, is a simple one, or the task continues
+-- @return `false` if it continues
+-- @return `nil` if there is no such quest/task, is a simple or non-active quest, or no value was given
 -- @see quests.update_quest
 function quests.update_quest_task(playername, questname, taskname, value)
-	if not check_active_quest(playername, questname) then
-		return false -- There is no such quest or it isn't active
-	end
-	local quest = quests.registered_quests[questname]
-	if quest.simple then
-		return false -- See quests.update_quest
-	end
-	local task = quest.tasks[taskname]
-	if taskname == nil or task == nil or value == nil then
-		return false -- No such task, or bad value
+	if not check_active_quest_task(playername, questname, taskname) or value == nil then
+		return nil
 	end
 	local plr_quest = quests.active_quests[playername][questname]
 	local plr_task = plr_quest[taskname]
-	if not plr_task or plr_task.finished then
-		return false -- The quest is already finished
+	if plr_task.finished then
+		return true -- The task is already finished
 	end
 
+	local quest = quests.registered_quests[questname]
+	local task = quest.tasks[taskname]
 	local task_finished = false
 	plr_task.value = plr_task.value + value
 	if plr_task.value >= task.max then
 		plr_task.value = task.max
 		plr_task.finished = true
-		task.endcallback(playername, questname, taskname, quest.metadata)
+		task.completecallback(playername, questname, taskname, quest.metadata)
 		task_finished = true
 	end
 
@@ -323,14 +325,122 @@ function quests.update_quest_task(playername, questname, taskname, value)
 	end
 	if all_tasks_finished then
 		if quest.autoaccept then
-			quest.endcallback(playername, questname, plr_quest.metadata)
+			quest.completecallback(playername, questname, plr_quest.metadata)
 			quests.accept_quest(playername,questname)
 			quests.update_hud(playername)
 		end
+		-- If the update of this task ends the quest, it consequently *is* finished.
 		return true
 	end
 	quests.update_hud(playername)
 	return task_finished
+end
+
+--- Checks if a quest's task is visible to the player.
+-- @param playername Name of the player
+-- @param questname Quest which contains the task
+-- @param taskname Task to check visibility
+-- @return `true` if the task is visible
+-- @return `false` if it is not
+-- @return `nil` if the quest/task doesn't exist, is simple or isn't active
+function quests.is_task_visible(playername, questname, taskname)
+	if not check_active_quest_task(playername, questname, taskname) then
+		return nil
+	end
+	return quests.active_quests[playername][questname][taskname].visible
+end
+
+--- Checks if a quest's task is disabled to the player.
+-- @param playername Name of the player
+-- @param questname Quest which contains the task
+-- @param taskname Task to check if it is disabled
+-- @return `true` if the task is disabled
+-- @return `false` if it is not
+-- @return `nil` if the quest/task doesn't exist, is simple or isn't active
+function quests.is_task_disabled(playername, questname, taskname)
+	if not check_active_quest_task(playername, questname, taskname) then
+		return nil
+	end
+	return quests.active_quests[playername][questname][taskname].disabled
+end
+
+--- Gets the number of active (visible & non-disabled) tasks, and how many of them are completed
+-- @param playername Name of the player
+-- @param questname Quest name
+-- @return `number, number` pair, where the first is the number of active tasks, and the second how many of them are completed
+-- @return `nil` if the quest doesn't exist, is simple or isn't active
+function quests.get_active_tasks_stats(playername, questname)
+	if not check_active_quest(playername, questname) or quests.registered_quests[questname].simple then
+		return nil
+	end
+	local plr_quest = quests.active_quests[playername][questname]
+	local active_tasks = 0
+	local completed_active = 0
+	for taskname, _ in pairs(quests.registered_quests[questname].tasks) do
+		local plr_task = plr_quest[taskname]
+		if plr_task.visible and not plr_task.disabled then
+			active_tasks = active_tasks + 1
+			if plr_task.finished then
+				completed_active = completed_active + 1
+			end
+		end
+	end
+	return active_tasks, completed_active
+end
+
+--- Gets number of seconds before a quest can be done again.
+-- @param playername Player's name
+-- @param questname Quest name
+-- @return `number` of seconds before quests becomes available
+-- @return `nil` if the quest isn't repeating
+function quests.quest_restarting_in(playername, questname)
+	if quests.info_quests[playername] and
+		quests.info_quests[playername][questname] and
+		quests.info_quests[playername][questname].restart_tstamp then
+		return quests.info_quests[playername][questname].restart_tstamp - os.time()
+	end
+	return nil
+end
+
+local function restart_periodic_quest(playername, questname)
+	quests.start_quest(playername, questname)
+	if quests.info_quests[playername] and quests.info_quests[playername][questname] then
+		quests.info_quests[playername][questname].restart_tstamp = nil
+	end
+end
+
+local function start_repeating_timer(playername, questname)
+	local delay = quests.quest_restarting_in(playername, questname)
+	if delay ~= nil then
+		minetest.after(delay, restart_periodic_quest, playername, questname)
+	end
+end
+
+local function start_all_repeating_timers(playername)
+	local qinfos = quests.info_quests[playername]
+	if qinfos then
+		for questname, qinfo in pairs(qinfos) do
+			if qinfo.restart_tstamp then
+				start_repeating_timer(playername, questname)
+			end
+		end
+	end
+end
+
+-- Restart all stopped repeating quests' timers
+for playername, _ in pairs(quests.info_quests) do
+	start_all_repeating_timers(playername)
+end
+
+local function handle_quest_end(playername, questname)
+	local quest = quests.registered_quests[questname]
+	if quest.repeating ~= 0 then
+		quests.info_quests[playername] = quests.info_quests[playername] or {}
+		quests.info_quests[playername][questname] = quests.info_quests[playername][questname] or {}
+		local qinfo = quests.info_quests[playername][questname]
+		qinfo.restart_tstamp = os.time() + quest.repeating
+		start_repeating_timer(playername, questname)
+	end
 end
 
 --- Confirms quest completion and ends it.
@@ -339,7 +449,7 @@ end
 -- @param playername Player's name
 -- @param questname Quest name
 -- @return `true` when the quest is completed
--- @return `false` when the quest is still ongoing
+-- @return `false` when an error occured (the quest is still ongoing if it was)
 function quests.accept_quest(playername, questname)
 	if check_active_quest(playername, questname) and not quests.active_quests[playername][questname].finished then
 		if quests.successfull_quests[playername] == nil then
@@ -357,6 +467,7 @@ function quests.accept_quest(playername, questname)
 				player:hud_change(quest.id, "number", quests.colors.success)
 			end
 		end
+		handle_quest_end(playername, questname)
 		quests.show_message("success", playername, S("Quest completed:") .. " " .. quests.registered_quests[questname].title)
 		minetest.after(3, function(playername, questname)
 			quests.active_quests[playername][questname] = nil
@@ -372,8 +483,8 @@ end
 -- Example: the player failed.
 -- @param playername Player's name
 -- @param questname Quest name
--- @return `false` if the quest was not aborted
 -- @return `true` when the quest was aborted
+-- @return `false` if there was an error (quest not aborted)
 function quests.abort_quest(playername, questname)
 	if not check_active_quest(playername, questname) then
 		return false
@@ -397,11 +508,13 @@ function quests.abort_quest(playername, questname)
 
 	local quest = quests.registered_quests[questname]
 	quest.abortcallback(playername, questname, quests.active_quests[playername][questname].metadata)
+	handle_quest_end(playername, questname)
 	quests.show_message("failed", playername, S("Quest failed:") .. " " .. quest.title)
 	minetest.after(3, function(playername, questname)
 		quests.active_quests[playername][questname] = nil
 		quests.update_hud(playername)
 	end, playername, questname)
+	return true
 end
 
 --- Get quest metadata.

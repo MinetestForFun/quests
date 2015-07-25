@@ -10,6 +10,7 @@ quests.registered_quests = {}
 quests.active_quests = quests.active_quests or {}
 quests.successfull_quests = quests.successfull_quests or {}
 quests.failed_quests = quests.failed_quests or {}
+quests.info_quests = quests.info_quests or {}
 quests.hud = quests.hud or {}
 for idx,_ in pairs(quests.hud) do
 	quests.hud[idx].first = true
@@ -45,22 +46,25 @@ end
 
 
 -- write the quests to file
-minetest.register_on_shutdown(function() 
-	minetest.log("action", "Writing quests to file")
+minetest.register_on_shutdown(function()
 	for playername, quest in pairs(quests.active_quests) do
 		for questname, questspecs in pairs(quest) do
-			if (questspecs.finished) then
+			if questspecs.finished then
 				quests.active_quests[playername][questname] = nil -- make sure no finished quests are saved as unfinished
 			end
 		end
 	end
-	local file = io.open(minetest.get_worldpath().."/quests", "w")
-	if (file) then
-		file:write(minetest.serialize({ --registered_quests  = quests.registered_quests,
+	local file, err = io.open(minetest.get_worldpath().."/quests", "w")
+	if file then
+		file:write(minetest.serialize({
 						active_quests      = quests.active_quests,
 						successfull_quests = quests.successfull_quests,
-						failed_quests	   = quests.failed_quests,
-						hud 		   = quests.hud}))
+						failed_quests      = quests.failed_quests,
+						info_quests        = quests.info_quests,
+						hud                = quests.hud}))
 		file:close()
+		minetest.log("action", "Wrote quests to file")
+	else
+		minetest.log("action", "Failed writing quests to file: open failed: " .. err)
 	end
 end)
