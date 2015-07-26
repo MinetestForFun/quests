@@ -26,11 +26,25 @@ end
 quests.colors = {
 	new     = "0xAAAA00",
 	success = "0x00AD00",
-	failed  = "0xAD0000"
+	failed  = "0xAD0000",
 }
 
 
 local MP = minetest.get_modpath("quests")
+
+function quests.sorted_pairs(t)
+	local a = {}
+	for n in pairs(t) do table.insert(a, n) end
+	table.sort(a)
+	local i = 0      -- iterator variable
+	local iter = function ()   -- iterator function
+		i = i + 1
+		if a[i] == nil then return nil
+			else return a[i], t[a[i]]
+		end
+	end
+	return iter
+end
 
 dofile(MP .. "/central_message.lua")
 dofile(MP .. "/core.lua")

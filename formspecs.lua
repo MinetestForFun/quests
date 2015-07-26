@@ -7,13 +7,13 @@ else
 	S = function(s) return s end
 end
 
-
 -- construct the questlog
 function quests.create_formspec(playername, tab, integrated)
 	local queststringlist = {}
 	local questlist = {}
-	quests.formspec_lists[playername] = quests.formspec_lists[playername] or {}
-	quests.formspec_lists[playername].id = 1
+	quests.formspec_lists[playername] = quests.formspec_lists[playername] or {
+		id = 1
+	}
 	quests.formspec_lists[playername].list = {}
 	tab = tab or quests.formspec_lists[playername].tab or "1"
 	if tab == "1" then
@@ -25,8 +25,8 @@ function quests.create_formspec(playername, tab, integrated)
 	end
 	quests.formspec_lists[playername].tab = tab
 
-	local no_quests = true
-	for questname,questspecs in pairs(questlist) do
+	local quest_count = 0
+	for questname,questspecs in quests.sorted_pairs(questlist) do
 		if not questspecs.finished then
 			local quest = quests.registered_quests[questname]
 			if quest then -- Quest might have been deleted
@@ -54,23 +54,33 @@ function quests.create_formspec(playername, tab, integrated)
 				end
 				table.insert(queststringlist, queststring)
 				table.insert(quests.formspec_lists[playername].list, questname)
-				no_quests = false
+				quest_count = quest_count + 1
 			end
 		end
+	end
+	if quest_count ~= 0 and quests.formspec_lists[playername].id > quest_count then
+		quests.formspec_lists[playername].id = quest_count
 	end
 	local formspec = ""
 	if not integrated then
 		formspec = formspec .. "size[7,9]"
 	end
 	formspec = formspec .. "tabheader[0,0;quests_header;" .. S("Open quests") .. "," .. S("Finished quests") .. "," .. S("Failed quests") .. ";" .. tab .. "]"
-	if no_quests then
+	if quest_count == 0 then
 		formspec = formspec .. "label[0.25,0.25;" .. S("There are no quests in this category.") .. "]"
 	else
-		formspec = formspec .. "textlist[0.25,0.25;6.5,6;quests_questlist;"..table.concat(queststringlist, ",") .. ";1;false]"
+		formspec = formspec .. "textlist[0.25,0.25;6.5,6;quests_questlist;"..table.concat(queststringlist, ",") .. ";" .. tostring(quests.formspec_lists[playername].id) .. ";false]"
 	end
 	if quests.formspec_lists[playername].tab == "1" then
+		local hud_display = "true"
+		if quests.formspec_lists[playername].id then
+			local questname = quests.formspec_lists[playername].list[quests.formspec_lists[playername].id]
+			if not quests.get_quest_hud_visibility(playername, questname) then
+				hud_display = "false"
+			end
+		end
 		formspec = formspec .."button[0.25,7.1;3,.7;quests_abort;" .. S("Abort quest") .. "]" ..
-				"checkbox[.25,6.2;quests_show_quest_in_hud;" .. S("Show in HUD") .. ";" .. "false" .. "]"
+				"checkbox[.25,6.2;quests_show_quest_in_hud;" .. S("Show in HUD") .. ";" .. hud_display .. "]"
 	end
 	formspec = formspec .. "button[3.75,7.1;3,.7;quests_config;" .. S("Configure") .. "]"..
 			"button[.25,8;3,.7;quests_info;" .. S("Info") .. "]"..
@@ -248,35 +258,51 @@ minetest.register_on_player_receive_fields(function(player, formname, fields)
 		end
 		return
 	end
-	if (fields["quests_questlist"]) then
-		local event = minetest.explode_textlist_event(fields["quests_questlist"])
-		if (event.type == "CHG") then
+	if fields.quests_questlist then
+		local event = minetest.explode_textlist_event(fields.quests_questlist)
+		if event.type == "CHG" then
 			quests.formspec_lists[playername].id = event.index
+			if formname == "quests:questlog" then
+				minetest.show_formspec(playername, "quests:questlog", quests.create_formspec(playername))
+			else 
+				unified_inventory.set_inventory_formspec(player, "quests")
+			end
 		end
 	end
-	if (fields["quests_abort"]) then
-		if (quests.formspec_lists[playername].id == nil) then
+	if fields.quests_abort then
+		if quests.formspec_lists[playername].id == nil then
 			return
 		end
-		quests.abort_quest(playername, quests.formspec_lists[playername]["list"][quests.formspec_lists[playername].id]) 
-		if (formname == "quests:questlog") then
+		quests.abort_quest(playername, quests.formspec_lists[playername].list[quests.formspec_lists[playername].id]) 
+		if formname == "quests:questlog" then
 			minetest.show_formspec(playername, "quests:questlog", quests.create_formspec(playername))
 		else
 			unified_inventory.set_inventory_formspec(player, "quests")
 		end
 	end
-	if (fields["quests_config"]) then
-		if (formname == "quests:questlog") then
+	if fields.quests_config then
+		if formname == "quests:questlog" then
 			minetest.show_formspec(playername, "quests:config", quests.create_config(playername))
 		else
 			unified_inventory.set_inventory_formspec(player, "quests_config")
 		end
 	end
-	if (fields["quests_info"]) then
-		if (formname == "quests:questlog") then
+	if fields.quests_info then
+		if formname == "quests:questlog" then
 			minetest.show_formspec(playername, "quests:info", quests.create_info(playername, quests.formspec_lists[playername].list[quests.formspec_lists[playername].id], nil, false))
 		else
 			unified_inventory.set_inventory_formspec(player, "quests_info")
+		end
+	end
+	if fields.quests_show_quest_in_hud ~= nil then
+		local questname = quests.formspec_lists[playername].list[quests.formspec_lists[playername].id]
+		if questname then
+			quests.set_quest_hud_visibility(playername, questname, fields.quests_show_quest_in_hud == "true")
+			if formname == "quests:questlog" then
+				minetest.show_formspec(playername, "quests:questlog", quests.create_formspec(playername))
+			else 
+				unified_inventory.set_inventory_formspec(player, "quests")
+			end
 		end
 	end
 

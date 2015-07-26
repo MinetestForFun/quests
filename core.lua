@@ -136,6 +136,12 @@ end
 -- In this previous example the 2 last tasks enables once the `start` one is completed, and the
 -- last one disables upon `another_task` completion, effectively making it optional if one
 -- completes `another_task` before it.
+-- Some task names are reserved and will be ignored:
+--
+-- * `metadata`
+-- * `finished`
+-- * `value`
+--
 -- Note: this function *copies* the `quest` table, keeping only what's needed. This way you can implement custom
 --       quest attributes in your mod and register the quest directly without worrying about keyvalue name collision.
 -- @param questname Name of the quest. Should follow the naming conventions: `modname:questname`
@@ -151,7 +157,7 @@ function quests.register_quest(questname, quest)
 		description      = quest.description or S("missing description"),
 		icon             = quest.icon or "quests_default_quest_icon.png",
 		startcallback    = quest.startcallback or empty_callback,
-		autoaccept       = quest.autoaccept or true,
+		autoaccept       = not(quest.autoaccept == false),
 		completecallback = quest.completecallback or empty_callback,
 		abortcallback    = quest.abortcallback or empty_callback,
 		repeating        = quest.repeating or 0 
@@ -168,18 +174,20 @@ function quests.register_quest(questname, quest)
 		new_quest.tasks = {}
 		local tcount = 0
 		for tname, task in pairs(quest.tasks) do
-			new_quest.tasks[tname] = {
-				title             = task.title or S("missing title"),
-				description       = task.description or S("missing description"),
-				icon              = task.icon or "quests_default_quest_icon.png",
-				max               = task.max or 1,
-				requires          = task.requires,
-				availablecallback = task.availablecallback or empty_callback,
-				disables_on       = task.disables_on,
-				disablecallback   = task.disablecallback or empty_callback,
-				completecallback  = task.completecallback or empty_callback
-			}
-			tcount = tcount + 1
+			if tname ~= "metadata" and tname ~= "finished" and tname ~= "value" then
+				new_quest.tasks[tname] = {
+					title             = task.title or S("missing title"),
+					description       = task.description or S("missing description"),
+					icon              = task.icon or "quests_default_quest_icon.png",
+					max               = task.max or 1,
+					requires          = task.requires,
+					availablecallback = task.availablecallback or empty_callback,
+					disables_on       = task.disables_on,
+					disablecallback   = task.disablecallback or empty_callback,
+					completecallback  = task.completecallback or empty_callback
+				}
+				tcount = tcount + 1
+			end
 		end
 		if tcount == 0 then -- No tasks!
 			quests.registered_quests[questname] = nil
@@ -218,8 +226,8 @@ function quests.start_quest(playername, questname, metadata)
 				finished = false
 			}
 		end
+		compute_tasks(playername, questname)
 	end
-	compute_tasks(playername, questname)
 
 	quests.update_hud(playername)
 	quests.show_message("new", playername, S("New quest:") .. " " .. quest.title)
@@ -280,6 +288,23 @@ function quests.update_quest(playername, questname, value)
 	return false -- the quest continues
 end
 
+--- Get a *simple* quest's progress.
+-- @param playername Name of the player
+-- @param questname Quest to get the progress value from
+-- @return `number` of the progress
+-- @return `nil` if there is no such quest, it is a tasked or non-active one
+-- @see quests.get_task_progress
+function quests.get_quest_progress(playername, questname)
+	if not check_active_quest(playername, questname) or not quests.registered_quests[questname].simple then
+		return nil
+	end
+	local plr_quest = quests.active_quests[playername][questname]
+	if plr_quest.finished then
+		return nil
+	end
+	return plr_quest.value
+end
+
 --- Updates a *tasked* quest task's status.
 -- Calls the quest's `completecallback` if autoaccept is `true` and all the quest's visible
 -- and non-disabled tasks reaches their max value.
@@ -334,6 +359,33 @@ function quests.update_quest_task(playername, questname, taskname, value)
 	end
 	quests.update_hud(playername)
 	return task_finished
+end
+
+--- Get a task's progress.
+-- Returns the max progress value possible for the given task if it is complete.
+-- @param playername Name of the player
+-- @param questname Quest the task belongs to
+-- @param taskname Task to get the progress value from
+-- @return `number` of the progress
+-- @return `false` if the task has been disabled by another
+-- @return `nil` if there is no such quest/task, or is a simple or non-active quest
+-- @see quests.get_quest_progress
+function quests.get_task_progress(playername, questname, taskname)
+	if not not check_active_quest_task(playername, questname, taskname) then
+		return nil
+	end
+	local plr_quest = quests.active_quests[playername][questname]
+	if plr_quest.finished then
+		return nil
+	end
+	local plr_task = plr_quest[taskname]
+	if not plr_task then
+		return nil
+	end
+	if plr_task.disabled then
+		return false
+	end
+	return plr_task.value
 end
 
 --- Checks if a quest's task is visible to the player.
@@ -515,6 +567,34 @@ function quests.abort_quest(playername, questname)
 		quests.update_hud(playername)
 	end, playername, questname)
 	return true
+end
+
+--- Set quest HUD visibility.
+-- @param playername Player's name
+-- @param questname Quest name
+-- @param visible `bool` indicating if the quest should be visible
+-- @see quests.get_quest_hud_visibility
+function quests.set_quest_hud_visibility(playername, questname, visible)
+	if not check_active_quest(playername, questname) then
+		return
+	end
+	quests.info_quests[playername] = quests.info_quests[playername] or {}
+	quests.info_quests[playername][questname] = quests.info_quests[playername][questname] or {}
+	quests.info_quests[playername][questname].hide_from_hud = not visible
+	quests.update_hud(playername)
+end
+
+--- Get quest HUD visibility.
+-- @param playername Player's name
+-- @param questname Quest name
+-- @return `bool`: quest HUD visibility
+-- @see quests.set_quest_hud_visibility
+function quests.get_quest_hud_visibility(playername, questname)
+	if not check_active_quest(playername, questname) then
+		return false
+	end
+	local plr_qinfos = quests.info_quests[playername]
+	return not(plr_qinfos and plr_qinfos[questname] and plr_qinfos[questname].hide_from_hud)
 end
 
 --- Get quest metadata.
