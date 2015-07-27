@@ -71,11 +71,11 @@ minetest.register_on_shutdown(function()
 	local file, err = io.open(minetest.get_worldpath().."/quests", "w")
 	if file then
 		file:write(minetest.serialize({
-						active_quests      = quests.active_quests,
-						successfull_quests = quests.successfull_quests,
-						failed_quests      = quests.failed_quests,
-						info_quests        = quests.info_quests,
-						hud                = quests.hud}))
+			active_quests      = quests.active_quests,
+			successfull_quests = quests.successfull_quests,
+			failed_quests      = quests.failed_quests,
+			info_quests        = quests.info_quests
+		}))
 		file:close()
 		minetest.log("action", "Wrote quests to file")
 	else
