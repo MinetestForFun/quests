@@ -52,14 +52,17 @@ function quests.hide_hud(playername)
 		return
 	end
 	for _,quest in pairs(quests.hud[playername].list) do
-		player:hud_remove(quest.id)
-		if (quest.id_background ~= nil) then
-			player:hud_remove(quest.id_background)
+		if quest.text and quest.text.id then
+			player:hud_remove(quest.text.id)
 		end
-		if (quest.id_bar ~= nil) then
-			player:hud_remove(quest.id_bar)
+		if quest.background and quest.background.id then
+			player:hud_remove(quest.background.id)
+		end
+		if quest.bar and quest.bar.id then
+			player:hud_remove(quest.bar.id)
 		end
 	end
+	player:hud_remove(quests.hud[playername].header)
 	quests.hud[playername].list = nil
 end
 
