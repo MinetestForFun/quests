@@ -16,6 +16,24 @@ local hud_config = { position = {x = 1, y = 0.2},
 			offset = { x = -200, y = 0},
 			number = quests.colors.new }
 
+--- Set the HUD position (not offset).
+-- Supplied positions may be `nil` and will be skipped.
+-- @note Calling this function while quests are already displayed will result
+--       in undefined behaviour. Call it beforehand.
+function quests.set_hud_position(x, y)
+	hud_config.position.x = x or hud_config.position.x
+	hud_config.position.y = y or hud_config.position.y
+end
+
+--- Set the HUD offset (not position).
+-- Supplied positions may be `nil` and will be skipped.
+-- @note Calling this function while quests are already displayed will result
+--       in undefined behaviour. Call it beforehand.
+function quests.set_hud_position(x, y)
+	hud_config.offset.x = x or hud_config.offset.x
+	hud_config.offset.y = y or hud_config.offset.y
+end
+
 --- Show quests HUD to player.
 -- The HUD can only show up to `show_max` quests
 -- @param playername Player whose quests HUD must be shown
