@@ -29,7 +29,7 @@ end
 -- Supplied positions may be `nil` and will be skipped.
 -- @note Calling this function while quests are already displayed will result
 --       in undefined behaviour. Call it beforehand.
-function quests.set_hud_position(x, y)
+function quests.set_hud_offset(x, y)
 	hud_config.offset.x = x or hud_config.offset.x
 	hud_config.offset.y = y or hud_config.offset.y
 end
