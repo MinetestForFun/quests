@@ -147,7 +147,7 @@ end
 -- @param questname Name of the quest. Should follow the naming conventions: `modname:questname`
 -- @param quest Quest definition `table`
 -- @return `true` when the quest was successfully registered
--- @return `false` when there was already such a quest, or if mandatory info was omitted/corrupt
+-- @return `false`, <error string> when there was already such a quest, or if mandatory info was omitted/corrupt
 function quests.register_quest(questname, quest)
 	if quests.registered_quests[questname] ~= nil then
 		return false -- The quest was not registered since there's already a quest with that name
@@ -169,7 +169,7 @@ function quests.register_quest(questname, quest)
 	else
 		if quest.tasks == nil or type(quest.tasks) ~= "table" then
 			quests.registered_quests[questname] = nil
-			return false
+			return false, "No quest.max defined but no tasks either"
 		end
 		new_quest.tasks = {}
 		local tcount = 0
@@ -191,7 +191,7 @@ function quests.register_quest(questname, quest)
 		end
 		if tcount == 0 then -- No tasks!
 			quests.registered_quests[questname] = nil
-			return false
+			return false, "No quest.max defined but no *valid* tasks either"
 		end
 	end
 	return true

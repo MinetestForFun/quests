@@ -59,7 +59,7 @@ function quests.show_hud(playername, autohide)
 	})
 
 	quests.hud[playername].list = {}
-	minetest.after(0, quests.update_hud, playername)
+	quests.update_hud(playername)
 end
 
 --- Hide quests HUD to player.
@@ -146,7 +146,7 @@ local function get_hud_list(playername)
 				deftable[questname] = get_table(get_quest_hud_string(quest.title, plr_quest.value, quest.max), plr_quest.value, quest.max)
 				counter = counter + 1
 			else
-				deftable[questname] = get_table(quest.title, plr_quest.value, quest.max)
+				deftable[questname] = get_table(quest.title)
 				counter = counter + 0.5
 				for taskname, task in pairs(quest.tasks) do
 					local plr_task = quests.active_quests[playername][questname][taskname]
@@ -158,7 +158,6 @@ local function get_hud_list(playername)
 						end
 					end
 				end
-				counter = counter + 0.1
 			end
 			if counter >= show_max + 1 then
 				break
@@ -252,6 +251,7 @@ function quests.update_hud(playername)
 			end
 		end
 	end
+	--[[ Disabled because it had issues with MT engine and too much quests. HUD elements sometimes won't update.
 	if diff ~= nil then
 		for questname, hud_elms in pairs(diff) do
 			if hud_elms == DELETED then
@@ -280,27 +280,24 @@ function quests.update_hud(playername)
 				end
 			end
 		end
+	end]]
+	for questname, hud_elms in pairs(old_hud) do
+		for elm_name, elm_def in pairs(hud_elms) do
+			player:hud_remove(elm_def.id)
+		end
+	end
+	for questname, hud_elms in pairs(new_hud) do
+		for elm_name, elm_def in pairs(hud_elms) do
+			elm_def.id = player:hud_add(elm_def)
+		end
 	end
 	quests.hud[playername].list = new_hud
 end
 
-
-
--- show the HUDs
---for playername,id in pairs(quests.hud) do
---	if (id ~= nil) then
---		quests.hud[playername] = nil
---		minetest.after(10, function(playername)
---			quests.show_hud(playername)
---			quests.update_hud(playername)
---		end, playername)
---	end
---end
-
 minetest.register_on_joinplayer(function(player)
 	local playername = player:get_player_name()
-	if (quests.hud[playername] ~= nil) then
-		if (not(quests.hud[playername].first)) then
+	if quests.hud[playername] ~= nil then
+		if not quests.hud[playername].first then
 			return
 		end
 		local list = quests.hud[playername].list
@@ -310,11 +307,6 @@ minetest.register_on_joinplayer(function(player)
 			autohide = autohide,
 			central_message_enabled = central_message_enabled
 		}
-		if (list ~= nil) then
-			minetest.after(1, function(playername)
-				quests.show_hud(playername)
-			end, playername)
-		end
 	else -- new player
 		quests.hud[playername] = {
 			autohide = true,
@@ -322,4 +314,7 @@ minetest.register_on_joinplayer(function(player)
 		}
 		quests.active_quests[playername] = {}
 	end
+	minetest.after(1, function(playername)
+		quests.show_hud(playername)
+	end, playername)
 end)
