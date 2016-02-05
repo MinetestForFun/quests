@@ -513,10 +513,12 @@ function quests.accept_quest(playername, questname)
 			quests.successfull_quests[playername][questname] = {count = 1}
 		end
 		quests.active_quests[playername][questname].finished = true
-		for _,quest in ipairs(quests.hud[playername].list) do
-			if quest.name == questname then
-				local player = minetest.get_player_by_name(playername)
-				player:hud_change(quest.id, "number", quests.colors.success)
+		if quests.hud[playername].list ~= nil then -- nil when HUD is hidden
+			for _,quest in ipairs(quests.hud[playername].list) do
+				if quest.name == questname then
+					local player = minetest.get_player_by_name(playername)
+					player:hud_change(quest.id, "number", quests.colors.success)
+				end
 			end
 		end
 		handle_quest_end(playername, questname)
@@ -551,10 +553,12 @@ function quests.abort_quest(playername, questname)
 	end
 
 	quests.active_quests[playername][questname].finished = true
-	for _,quest in ipairs(quests.hud[playername].list) do
-		if quest.name == questname then
-			local player = minetest.get_player_by_name(playername)
-			player:hud_change(quest.id, "number", quests.colors.failed)
+	if quests.hud[playername].list ~= nil then -- nil when HUD is hidden
+		for _,quest in ipairs(quests.hud[playername].list) do
+			if quest.name == questname then
+				local player = minetest.get_player_by_name(playername)
+				player:hud_change(quest.id, "number", quests.colors.failed)
+			end
 		end
 	end
 
