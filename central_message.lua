@@ -7,9 +7,6 @@ if rawget(_G, "cmsg") then
 		end
 	end
 else
-	function quests.show_message(t, playername, text)
-		if (quests.hud[playername].central_message_enabled) then
-			minetest.sound_play("quests_" .. t, {to_player = playername})
-		end
+	function quests.show_message(...)
 	end
 end
