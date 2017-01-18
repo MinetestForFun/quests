@@ -297,9 +297,9 @@ end
 minetest.register_on_joinplayer(function(player)
 	local playername = player:get_player_name()
 	if quests.hud[playername] ~= nil then
-		if not quests.hud[playername].first then
-			return
-		end
+		---if not quests.hud[playername].first then
+		---	return
+		---end
 		local list = quests.hud[playername].list
 		local autohide = quests.hud[playername].autohide
 		local central_message_enabled = quests.hud[playername].central_message_enabled
