@@ -1,4 +1,4 @@
-if rawget(_G, "cmsg") then
+if minetest.global_exists("cmsg") then
 	function quests.show_message(t, playername, text)
 		if (quests.hud[playername].central_message_enabled) then
 			local player = minetest.get_player_by_name(playername)
