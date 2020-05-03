@@ -46,17 +46,11 @@ function quests.sorted_pairs(t)
 	return iter
 end
 
-dofile(MP .. "/central_message.lua")
 dofile(MP .. "/core.lua")
 dofile(MP .. "/hud.lua")
 dofile(MP .. "/formspecs.lua")
+dofile(MP .. "/mod_integrations/mod_integrations.lua")
 
--- support for unified_inventory
-if (minetest.get_modpath("unified_inventory") ~= nil) then
-	dofile(minetest.get_modpath("quests") .. "/unified_inventory.lua")
-elseif (minetest.get_modpath("inventory_plus") ~= nil) then
-	dofile(minetest.get_modpath("quests") .. "/inventory_plus.lua")
-end
 
 
 -- write the quests to file
