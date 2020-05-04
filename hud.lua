@@ -2,13 +2,7 @@
 -- @module hud
 
 -- Boilerplate to support localized strings if intllib mod is installed.
-local S
-if minetest.get_modpath("intllib") then
-	S = intllib.Getter()
-else
-	-- If you don't use insertions (@1, @2, etc) you can use this:
-	S = function(s) return s end
-end
+local S = minetest.get_translator("quests")
 
 local show_max = 10 -- the maximum visible quests.
 
@@ -55,7 +49,7 @@ function quests.show_hud(playername, autohide)
 		position = {x = hud_config.position.x, y = hud_config.position.y},
 		offset = {x = hud_config.offset.x, y = hud_config.offset.y - 20},
 		number = hud_config.number,
-		text = S("Quests:")
+		text = S("Quests") .. ":"
 	})
 
 	quests.hud[playername].list = {}
@@ -190,7 +184,7 @@ function quests.update_hud(playername)
 			player:hud_change(quests.hud[playername].header, "text", S("No more Quests"))
 			minetest.after(3, function(playername)
 				if next(quests.active_quests[playername]) ~= nil then
-					player:hud_change(quests.hud[playername].header, "text", S("Quests:"))
+					player:hud_change(quests.hud[playername].header, "text", S("Quests")..":")
 					quests.update_hud(playername)
 				else
 					quests.hide_hud(playername)

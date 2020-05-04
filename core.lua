@@ -2,13 +2,7 @@
 -- @module core
 
 -- Boilerplate to support localized strings if intllib mod is installed.
-local S
-if minetest.get_modpath("intllib") then
-	S = intllib.Getter()
-else
-	-- If you don't use insertions (@1, @2, etc) you can use this:
-	S = function(s) return s end
-end
+local S = minetest.get_translator("quests")
 local empty_callback = function(...) end
 
 local function compute_tasks(playername, questname, nocallback)
@@ -230,7 +224,7 @@ function quests.start_quest(playername, questname, metadata)
 	end
 
 	quests.update_hud(playername)
-	quests.show_message("new", playername, S("New quest:") .. " " .. quest.title)
+	quests.show_message("new", playername, S("New quest") .. ": " .. quest.title)
 	return true
 end
 
@@ -522,7 +516,7 @@ function quests.accept_quest(playername, questname)
 			end
 		end
 		handle_quest_end(playername, questname)
-		quests.show_message("success", playername, S("Quest completed:") .. " " .. quests.registered_quests[questname].title)
+		quests.show_message("success", playername, S("Quest completed") .. ": " .. quests.registered_quests[questname].title)
 		minetest.after(3, function(playername, questname)
 			quests.active_quests[playername][questname] = nil
 			quests.update_hud(playername)
@@ -565,7 +559,7 @@ function quests.abort_quest(playername, questname)
 	local quest = quests.registered_quests[questname]
 	quest.abortcallback(playername, questname, quests.active_quests[playername][questname].metadata)
 	handle_quest_end(playername, questname)
-	quests.show_message("failed", playername, S("Quest failed:") .. " " .. quest.title)
+	quests.show_message("failed", playername, S("Quest failed") .. ": " .. quest.title)
 	minetest.after(3, function(playername, questname)
 		quests.active_quests[playername][questname] = nil
 		quests.update_hud(playername)
