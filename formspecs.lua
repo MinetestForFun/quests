@@ -111,34 +111,6 @@ function quests.create_config(playername, integrated)
 	return formspec
 end
 
-local function wordwrap(text, linelength)
-	local lines = text:split("\n")
-	local ret = ""
-	for i = 1,#lines do
-		local line = lines[i]
-		while (#line > linelength) do
-			local split = false
-			local j = linelength
-			while (not split) do
-				if (string.sub(line, j, j) == " ") then
-					split = true
-					ret = ret .. string.sub(line, 1, j) .. "\n"
-					line = string.sub(line, j + 1)
-				end
-				if (j <= 1) then
-					break
-				end
-				j = j - 1
-			end
-			if (not split) then
-				ret = ret .. string.sub(line, 1, linelength) .. "\n"
-				line = string.sub(line, linelength);
-			end
-		end
-		ret = ret .. line .. "\n"
-	end
-	return ret
-end
 
 -- construct the info formspec
 function quests.create_info(playername, questname, taskid, integrated)
@@ -159,7 +131,7 @@ function quests.create_info(playername, questname, taskid, integrated)
 		end
 
 		if quest.simple then
-			formspec = formspec .. "textarea[.4,1;7.2,7;_;;" .. minetest.formspec_escape(quest.description) .. "]"
+			formspec = formspec .. "textarea[.4,1;7.2,7;;;" .. minetest.formspec_escape(quest.description) .. "]"
 		else
 			quests.formspec_lists[playername].taskid = nil
 			local taskidlist = {}
