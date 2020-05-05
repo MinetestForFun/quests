@@ -7,8 +7,11 @@ if minetest.get_modpath("inventory_plus") then
 	dofile(minetest.get_modpath("quests") .. "/mod_integrations/inventory_plus.lua")
 end
 
+if minetest.global_exists("sfinv") then
+	dofile(minetest.get_modpath("quests") .. "/mod_integrations/sfinv.lua")
+end
 
---mod that displays notifications in the screen's center
+-- mod that displays notifications in the screen's center
 if minetest.get_modpath("central_message") then
 	dofile(minetest.get_modpath("quests") .. "/mod_integrations/central_message.lua")
 
